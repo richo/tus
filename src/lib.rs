@@ -37,7 +37,10 @@ pub struct Client {
 }
 
 impl Client {
-    /// Creates a new
+    /// Creates a new Client.
+    ///
+    /// Headers should be a HeaderMap preloaded with all necessary information to communicate with
+    /// the endpoint, including eg authentication information.
     pub fn new(url: String, headers: HeaderMap) -> Client {
         Client {
             url,
