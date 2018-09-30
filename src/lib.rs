@@ -60,7 +60,6 @@ impl Client {
             headers.insert(UPLOAD_OFFSET.clone(), HeaderValue::from_str(&format!("{}", offset))?);
             offset += self.upload_chunk(buf, headers)?;
         }
-        Ok(offset)
     }
 
     fn upload_chunk(&mut self, chunk: Vec<u8>, headers: HeaderMap) -> Result<usize, Error> {
