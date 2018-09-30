@@ -1,0 +1,9 @@
+[package]
+name = "tus"
+version = "0.1.0"
+authors = ["Richo Healey <richo@stripe.com>"]
+
+[dependencies]
+reqwest = "0.9"
+failure = "0.1.2"
+lazy_static = "1.1.0"
