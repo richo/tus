@@ -28,6 +28,16 @@ lazy_static! {
     static ref OFFSET_OCTET_STREAM: HeaderValue = HeaderValue::from_static("application/offset+octet-stream");
 }
 
+/// Returns the minimum set of headers required to make a TUS request. This should be used as the
+/// basis for constructing your headers.
+pub fn default_headers(size: u64) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(&*TUS_RESUMABLE, HeaderValue::from_static(TUS_VERSION));
+    headers.insert(&*UPLOAD_LENGTH, HeaderValue::from_str(&format!("{}", size)).unwrap());
+    headers.insert(reqwest::header::CONTENT_TYPE, OFFSET_OCTET_STREAM.clone());
+    headers
+}
+
 /// A client for a TUS endpoint. This leaks a lot of the implementation details of reqwest.
 pub struct Client<'a> {
     url: &'a str,
@@ -79,13 +89,13 @@ impl<'a> Client<'a> {
 
     fn upload_chunk(&self, chunk: Vec<u8>, headers: HeaderMap) -> Result<usize, Error> {
         let len = chunk.len();
-        let res = self.client
+        let mut res = self.client
             .patch(self.url)
             .body(chunk)
             .headers(headers)
             .send()?;
         if res.status() != reqwest::StatusCode::NO_CONTENT {
-            return Err(format_err!("Did not save chunk: {}", res.status()))
+            return Err(format_err!("Did not save chunk: {} -> {}", res.status(), &res.text()?))
         }
         // TODO(richo) parse out the UPLOAD_OFFSET value, and do the appropriate bookkeeping
         // internally to resend any of the chunk that was not saved.
@@ -146,7 +156,33 @@ mod tests {
     fn test_entropy_works() {
         let (mut file, bytes) = entropy_filled_file();
         let mut vec = Vec::with_capacity(1024);
-        file.read_to_end(&mut vec);
+        file.read_to_end(&mut vec).expect("Couldn't fill buffer");
         assert_eq!(&bytes[..], &vec[..]);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_uploads_a_file() {
+        let file = File::open("/tmp/test.mp4").expect("Couldn't open file");
+        let size = file.metadata().expect("Couldn't get metadata").len();
+
+        // Get an upload link
+        let mut headers = default_headers(size);
+        let mut resp = reqwest::Client::new()
+            .post("https://master.tus.io/files/")
+            .headers(headers)
+            .send()
+            .expect("couldn't get upload location");
+
+        let loc = resp
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .expect("didn't get a location header")
+            .to_str()
+            .expect("couldn't prase location header");
+
+        let headers = default_headers(size);
+        let client = Client::new(loc, headers);
+        client.upload(file).expect("Couldn't upload file");
     }
 }
