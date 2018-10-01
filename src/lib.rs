@@ -133,7 +133,7 @@ mod tests {
         rng.fill(&mut bytes[..]);
         let written = tmp.write(&mut bytes).expect("Couldn't fill buffer");
         assert!(written > 0, "Didn't write anything to the tempfile");
-        tmp.seek(std::io::SeekFrom::Start(0));
+        tmp.seek(std::io::SeekFrom::Start(0)).expect("Couldn't seek");
 
         (tmp, bytes)
     }
@@ -144,10 +144,10 @@ mod tests {
         let client = test_client();
 
         let mut vec: Vec<u8> = vec![];
-        client.upload_inner(file, |chunk, offset| {
+        client.upload_inner(file, |chunk, _| {
             vec.extend(&chunk);
             Ok(chunk.len())
-        });
+        }).expect("Didn't upload_inner");
 
         assert_eq!(&vec[..], &bytes[..]);
     }
@@ -167,8 +167,8 @@ mod tests {
         let size = file.metadata().expect("Couldn't get metadata").len();
 
         // Get an upload link
-        let mut headers = default_headers(size);
-        let mut resp = reqwest::Client::new()
+        let headers = default_headers(size);
+        let resp = reqwest::Client::new()
             .post("https://master.tus.io/files/")
             .headers(headers)
             .send()
