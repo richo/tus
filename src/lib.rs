@@ -67,11 +67,12 @@ impl<'a> Client<'a> {
         loop {
             let mut chunk = vec![0; CHUNK_SIZE];
             let bytes_read = reader.read(&mut chunk)?;
+            chunk.truncate(bytes_read);
             if bytes_read == 0 {
                 return Ok(offset)
             }
             chunk.truncate(bytes_read);
-            cb(chunk, bytes_read)?;
+            cb(chunk, offset)?;
             offset += bytes_read;
         }
     }
