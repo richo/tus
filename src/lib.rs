@@ -8,11 +8,12 @@
 extern crate failure;
 #[macro_use]
 extern crate lazy_static;
-extern crate reqwest;
+use reqwest;
 
 use std::io::Read;
 use failure::Error;
 pub use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use url::Url;
 
 /// Version of the TUS protocol we're configured to use.
 pub const TUS_VERSION: &'static str = "1.0.0";
@@ -39,19 +40,19 @@ pub fn default_headers(size: u64) -> HeaderMap {
 }
 
 /// A client for a TUS endpoint. This leaks a lot of the implementation details of reqwest.
-pub struct Client<'a> {
-    url: &'a str,
+pub struct Client {
+    url: Url,
     headers: HeaderMap,
     // TODO(richo) Make this generic over some trait so we can test it
     client: reqwest::Client,
 }
 
-impl<'a> Client<'a> {
+impl Client {
     /// Creates a new Client.
     ///
     /// Headers should be a HeaderMap preloaded with all necessary information to communicate with
     /// the endpoint, including eg authentication information.
-    pub fn new(url: &'a str, headers: HeaderMap) -> Client {
+    pub fn new(url: Url, headers: HeaderMap) -> Client {
         Client {
             url,
             headers,
@@ -90,7 +91,7 @@ impl<'a> Client<'a> {
     fn upload_chunk(&self, chunk: Vec<u8>, headers: HeaderMap) -> Result<usize, Error> {
         let len = chunk.len();
         let mut res = self.client
-            .patch(self.url)
+            .patch(self.url.as_str())
             .body(chunk)
             .headers(headers)
             .send()?;
@@ -112,9 +113,9 @@ mod tests {
     extern crate tempfile;
 
     /// Create a dummy client for use in tests
-    fn test_client<'a>() -> Client<'a> {
+    fn test_client() -> Client {
         Client {
-            url: "https://test-url.com/foo",
+            url: "https://test-url.com/foo".parse().expect("Couldn't parse URL"),
             headers: HeaderMap::new(),
             client: reqwest::Client::new(),
         }
@@ -179,7 +180,9 @@ mod tests {
             .get(reqwest::header::LOCATION)
             .expect("didn't get a location header")
             .to_str()
-            .expect("couldn't prase location header");
+            .expect("couldn't parse location header")
+            .parse()
+            .expect("Couldn't parse location header into a url");
 
         let headers = default_headers(size);
         let client = Client::new(loc, headers);
