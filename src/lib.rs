@@ -66,6 +66,7 @@ impl Client {
         self.upload_inner(reader, |chunk, offset| {
             let mut headers = self.headers.clone();
             headers.insert(UPLOAD_OFFSET.clone(), HeaderValue::from_str(&format!("{}", offset))?);
+            headers.remove("upload-length");
             self.upload_chunk(chunk, headers)
         })
     }
