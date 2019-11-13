@@ -8,11 +8,11 @@ repository = "https://github.com/richo/tus"
 license = "MIT"
 
 [dependencies]
-reqwest = "0.9"
-failure = "0.1.2"
-lazy_static = "1.1.0"
-url = "1.7.2"
+reqwest = "0.9.22"
+failure = "0.1.6"
+lazy_static = "1.4.0"
+url = "2.1.0"
 
 [dev-dependencies]
-rand = "0.5.5"
-tempfile = "3.0.4"
+rand = "0.7.2"
+tempfile = "3.1.0"
