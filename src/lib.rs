@@ -10,6 +10,8 @@ extern crate failure;
 extern crate lazy_static;
 use reqwest;
 
+use std::future::Future;
+
 use std::io::Read;
 use failure::Error;
 pub use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -61,19 +63,20 @@ impl Client {
     }
 
     /// Uploads all content from `reader` to the endpoint, consuming this Client.
-    pub fn upload<T>(self, reader: T) -> Result<usize, Error>
+    pub async fn upload<T>(self, reader: T) -> Result<usize, Error>
     where T: Read {
         self.upload_inner(reader, |chunk, offset| {
             let mut headers = self.headers.clone();
-            headers.insert(UPLOAD_OFFSET.clone(), HeaderValue::from_str(&format!("{}", offset))?);
+            headers.insert(UPLOAD_OFFSET.clone(), HeaderValue::from_str(&format!("{}", offset)).expect("Creating a future feels like work"));
             headers.remove("upload-length");
             self.upload_chunk(chunk, headers)
-        })
+        }).await
     }
 
-    fn upload_inner<T, U>(&self, mut reader: T, mut cb: U) -> Result<usize, Error>
+    async fn upload_inner<T, U, F>(&self, mut reader: T, mut cb: U) -> Result<usize, Error>
     where T: Read,
-          U: FnMut(Vec<u8>, usize) -> Result<usize, Error>,
+          F: Future<Output = Result<usize, Error>>,
+          U: FnMut(Vec<u8>, usize) -> F,
     {
         let mut offset = 0;
         loop {
@@ -84,20 +87,20 @@ impl Client {
                 return Ok(offset)
             }
             chunk.truncate(bytes_read);
-            cb(chunk, offset)?;
+            cb(chunk, offset).await?;
             offset += bytes_read;
         }
     }
 
-    fn upload_chunk(&self, chunk: Vec<u8>, headers: HeaderMap) -> Result<usize, Error> {
+    async fn upload_chunk(&self, chunk: Vec<u8>, headers: HeaderMap) -> Result<usize, Error> {
         let len = chunk.len();
-        let mut res = self.client
+        let res = self.client
             .patch(self.url.as_str())
             .body(chunk)
             .headers(headers)
-            .send()?;
+            .send().await?;
         if res.status() != reqwest::StatusCode::NO_CONTENT {
-            return Err(format_err!("Did not save chunk: {} -> {}", res.status(), &res.text()?))
+            return Err(format_err!("Did not save chunk: {} -> {}", res.status(), &res.text().await?))
         }
         // TODO(richo) parse out the UPLOAD_OFFSET value, and do the appropriate bookkeeping
         // internally to resend any of the chunk that was not saved.
